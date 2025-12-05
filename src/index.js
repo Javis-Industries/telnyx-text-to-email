@@ -8,11 +8,10 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
-
 export default {
   async fetch(request, env) {
-    if (request.method !== 'POST') {
-      return new Response('Method not allowed', { status: 405 });
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
     }
 
     try {
@@ -24,35 +23,44 @@ export default {
       // For now, skipped for simplicity. Add if needed for security.
 
       // Only process inbound messages
-      if (data.event_type !== 'message.received' || data.payload.direction !== 'inbound') {
-        return new Response('OK', { status: 200 });
+      if (
+        data.event_type !== "message.received" ||
+        data.payload.direction !== "inbound"
+      ) {
+        return new Response("OK", { status: 200 });
       }
 
       const messagePayload = data.payload;
       const fromPhone = messagePayload.from.phone_number;
-      const text = messagePayload.text || '(No text)';
+      const text = messagePayload.text || "(No text)";
       const timestamp = data.occurred_at;
 
       const date = new Date(timestamp);
-      const friendlyDate = date.toLocaleString('en-US', { timeZone: 'America/Chicago', timeZoneName: 'short'});
+      const friendlyDate = date.toLocaleString("en-US", {
+        timeZone: "America/Chicago",
+        timeZoneName: "short",
+      });
 
       // Handle media (images only for simplicity)
-      let mediaHtml = '';
+      let mediaHtml = "";
       const media = messagePayload.media || [];
       for (const item of media) {
-        if (item.content_type.startsWith('image/')) {
+        if (item.content_type.startsWith("image/")) {
           try {
             const response = await fetch(item.url);
             if (response.ok) {
               const arrayBuffer = await response.arrayBuffer();
               const base64Image = btoa(
-                new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+                new Uint8Array(arrayBuffer).reduce(
+                  (data, byte) => data + String.fromCharCode(byte),
+                  ""
+                )
               );
               const dataUri = `data:${item.content_type};base64,${base64Image}`;
               mediaHtml += `<p><strong>Image:</strong><br><img src="${dataUri}" alt="MMS Image" style="max-width: 300px;"></p>`;
             }
           } catch (error) {
-            console.error('Failed to fetch media:', error);
+            console.error("Failed to fetch media:", error);
             mediaHtml += `<p><strong>Image:</strong> Failed to load ${item.url}</p>`;
           }
         }
@@ -69,35 +77,38 @@ export default {
 
       // Prepare Mailgun payload (form-urlencoded for compatibility)
       const mailgunData = {
-        from: `SMS Alerts <noreply@${env.MAILGUN_DOMAIN}>`,  // Replace with your verified sender
-        to: `${env.TO_EMAIL}`,  // Replace with recipient
+        from: `SMS Alerts ${env.FROM_EMAIL}>`, // Replace with your verified sender
+        to: `${env.TO_EMAIL}`, // Replace with recipient
         subject: `New SMS from ${fromPhone}`,
         html: emailBody,
-        text: emailBody.replace(/<[^>]*>/g, ''),  // Plain text fallback
+        text: emailBody.replace(/<[^>]*>/g, ""), // Plain text fallback
       };
 
       // URL-encode for form data
       const formData = new URLSearchParams(mailgunData);
 
       // Send to Mailgun
-      const mailgunResponse = await fetch(`https://api.mailgun.net/v3/${env.MAILGUN_DOMAIN}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${btoa('api:' + env.MAILGUN_API_KEY)}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData,
-      });
+      const mailgunResponse = await fetch(
+        `https://api.mailgun.net/v3/${env.MAILGUN_DOMAIN}/messages`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${btoa("api:" + env.MAILGUN_API_KEY)}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formData,
+        }
+      );
 
       if (!mailgunResponse.ok) {
-        console.error('Mailgun error:', await mailgunResponse.text());
+        console.error("Mailgun error:", await mailgunResponse.text());
         // Still return 200 to Telnyx to avoid retries, but log for debugging
       }
 
-      return new Response('OK', { status: 200 });
+      return new Response("OK", { status: 200 });
     } catch (error) {
-      console.error('Worker error:', error);
-      return new Response('Internal Server Error', { status: 500 });
+      console.error("Worker error:", error);
+      return new Response("Internal Server Error", { status: 500 });
     }
   },
 };
