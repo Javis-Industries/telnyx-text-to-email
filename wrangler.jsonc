@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "telnyx-text-to-email",
+	"name": "text-to-email",
 	"main": "src/index.js",
 	"compatibility_date": "2025-12-05",
 	"observability": {
