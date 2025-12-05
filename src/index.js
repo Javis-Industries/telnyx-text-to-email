@@ -77,7 +77,7 @@ export default {
 
       // Prepare Mailgun payload (form-urlencoded for compatibility)
       const mailgunData = {
-        from: `SMS Alerts ${env.FROM_EMAIL}>`, // Replace with your verified sender
+        from: `SMS Alerts <${env.FROM_EMAIL}>`, // Replace with your verified sender
         to: `${env.TO_EMAIL}`, // Replace with recipient
         subject: `New SMS from ${fromPhone}`,
         html: emailBody,
