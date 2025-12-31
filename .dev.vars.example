@@ -1,0 +1,4 @@
+MAILGUN_API_KEY=your-api-key-here
+MAILGUN_DOMAIN=https://example.com
+TO_EMAIL=jon@example.com
+FROM_EMAIL=jane@example.com

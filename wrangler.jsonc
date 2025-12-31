@@ -25,12 +25,8 @@
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
-	"vars": { 
-		"MAILGUN_API_KEY": "production_value",
-		"MAILGUN_DOMAIN": "production_value",
-		"TO_EMAIL": "production_value",
-		"FROM_EMAIL": "production_value"
- 		}
+	// "vars": { 
+ 	// 	}
 	/**
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
