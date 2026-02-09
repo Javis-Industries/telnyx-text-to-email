@@ -8,6 +8,26 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
+let cachedNumberToEmail = null;
+
+function getNumberToEmailMap(env) {
+  if (cachedNumberToEmail) return cachedNumberToEmail;
+  try {
+    cachedNumberToEmail = env.NUMBER_TO_EMAIL
+      ? JSON.parse(env.NUMBER_TO_EMAIL)
+      : {};
+  } catch (error) {
+    console.error("Invalid NUMBER_TO_EMAIL JSON:", error);
+    cachedNumberToEmail = {};
+  }
+  return cachedNumberToEmail;
+}
+
+function getRecipientEmail(env, toPhone) {
+  const map = getNumberToEmailMap(env);
+  return (toPhone && map[toPhone]) || env.TO_EMAIL;
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
@@ -32,6 +52,10 @@ export default {
 
       const messagePayload = data.payload;
       const fromPhone = messagePayload.from.phone_number;
+      const toPhone =
+        (Array.isArray(messagePayload.to) && messagePayload.to[0]?.phone_number) ||
+        messagePayload.to?.phone_number ||
+        messagePayload.to;
       const text = messagePayload.text || "(No text)";
       const timestamp = data.occurred_at;
 
@@ -78,7 +102,7 @@ export default {
       // Prepare Mailgun payload (form-urlencoded for compatibility)
       const mailgunData = {
         from: `SMS Alerts <${env.FROM_EMAIL}>`, // Replace with your verified sender
-        to: `${env.TO_EMAIL}`, // Replace with recipient
+        to: `${getRecipientEmail(env, toPhone)}`, // Replace with recipient
         subject: `New SMS from ${fromPhone}`,
         html: emailBody,
         text: emailBody.replace(/<[^>]*>/g, ""), // Plain text fallback
