@@ -23,9 +23,10 @@ function getNumberToEmailMap(env) {
   return cachedNumberToEmail;
 }
 
-function getRecipientEmail(env, toPhone) {
-  const map = getNumberToEmailMap(env);
-  return (toPhone && map[toPhone]) || env.TO_EMAIL;
+async function getRecipientEmail(env, toPhone) {
+  if (!toPhone) return env.TO_EMAIL;
+  const email = await env.NUMBER_MAP.get(toPhone);
+  return email || env.TO_EMAIL;
 }
 
 export default {
@@ -53,7 +54,8 @@ export default {
       const messagePayload = data.payload;
       const fromPhone = messagePayload.from.phone_number;
       const toPhone =
-        (Array.isArray(messagePayload.to) && messagePayload.to[0]?.phone_number) ||
+        (Array.isArray(messagePayload.to) &&
+          messagePayload.to[0]?.phone_number) ||
         messagePayload.to?.phone_number ||
         messagePayload.to;
       const text = messagePayload.text || "(No text)";
@@ -77,8 +79,8 @@ export default {
               const base64Image = btoa(
                 new Uint8Array(arrayBuffer).reduce(
                   (data, byte) => data + String.fromCharCode(byte),
-                  ""
-                )
+                  "",
+                ),
               );
               const dataUri = `data:${item.content_type};base64,${base64Image}`;
               mediaHtml += `<p><strong>Image:</strong><br><img src="${dataUri}" alt="MMS Image" style="max-width: 300px;"></p>`;
@@ -121,7 +123,7 @@ export default {
             "Content-Type": "application/x-www-form-urlencoded",
           },
           body: formData,
-        }
+        },
       );
 
       if (!mailgunResponse.ok) {
