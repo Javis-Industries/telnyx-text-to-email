@@ -191,31 +191,43 @@ export default {
       const fromPhoneForReply = getFromPhoneForReply(messagePayload);
       const toPhone = getToPhone(messagePayload);
       const text = messagePayload.text || "(No text)";
-      const route = await getRoute(env, toPhone);
 
-      // Default behavior: forward email unless route says otherwise.
-      const mode = route?.mode || "forward_email";
+      if (!toPhone) {
+        console.error("Missing or invalid destination phone number in payload");
+        return okResponse();
+      }
+
+      const route = await getRoute(env, toPhone);
+      if (!route) {
+        console.error(`No route configured for destination number: ${toPhone}`);
+        return okResponse();
+      }
+
+      const mode = route.mode;
       if (mode === "auto_reply") {
-        if (!route?.reply_text) {
+        if (!route.reply_text) {
           console.error("Missing reply_text for auto_reply route");
           return okResponse();
         }
-        if (!toPhone || !fromPhoneForReply) {
+        if (!fromPhoneForReply) {
           console.error("Cannot auto-reply due to invalid phone format");
           return okResponse();
         }
         await sendTelnyxReply(env, toPhone, fromPhoneForReply, route.reply_text);
       } else if (mode === "forward_email") {
+        if (!route.email) {
+          console.error(`Missing email in forward_email route for: ${toPhone}`);
+          return okResponse();
+        }
         const date = new Date(data.occurred_at);
         const friendlyDate = date.toLocaleString("en-US", {
           timeZone: "America/Chicago",
           timeZoneName: "short",
         });
         const mediaHtml = await processMedia(messagePayload);
-        const recipientEmail = route?.email || env.TO_EMAIL;
         await sendMailgunEmail(
           env,
-          recipientEmail,
+          route.email,
           fromPhone,
           friendlyDate,
           text,
