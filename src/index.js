@@ -8,24 +8,9 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
-let cachedNumberToEmail = null;
-
-function getNumberToEmailMap(env) {
-  if (cachedNumberToEmail) return cachedNumberToEmail;
-  try {
-    cachedNumberToEmail = env.NUMBER_TO_EMAIL
-      ? JSON.parse(env.NUMBER_TO_EMAIL)
-      : {};
-  } catch (error) {
-    console.error("Invalid NUMBER_TO_EMAIL JSON:", error);
-    cachedNumberToEmail = {};
-  }
-  return cachedNumberToEmail;
-}
-
 async function getRecipientEmail(env, toPhone) {
   if (!toPhone) return env.TO_EMAIL;
-  const email = await env.NUMBER_MAP.get(toPhone);
+  const email = await env.NUMBER_TO_EMAIL.get(toPhone);
   return email || env.TO_EMAIL;
 }
 
@@ -104,7 +89,7 @@ export default {
       // Prepare Mailgun payload (form-urlencoded for compatibility)
       const mailgunData = {
         from: `SMS Alerts <${env.FROM_EMAIL}>`, // Replace with your verified sender
-        to: `${getRecipientEmail(env, toPhone)}`, // Replace with recipient
+        to: await getRecipientEmail(env, toPhone), // Replace with recipient
         subject: `New SMS from ${fromPhone}`,
         html: emailBody,
         text: emailBody.replace(/<[^>]*>/g, ""), // Plain text fallback

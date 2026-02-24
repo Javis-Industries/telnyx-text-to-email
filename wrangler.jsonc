@@ -13,7 +13,8 @@
 	"kv_namespaces": [
 		{
 			"binding": "NUMBER_TO_EMAIL",
-			"id": "e89c93a640704b018faea58364544fa5"
+			"id": "e89c93a640704b018faea58364544fa5",
+			"remote": true
 		}
 	],
 	/**
