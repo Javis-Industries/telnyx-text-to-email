@@ -9,13 +9,33 @@
  */
 
 const ROUTE_KEY_PREFIX = "route:";
+const E164_MIN_DIGITS = 8;
+const E164_MAX_DIGITS = 15;
+
+function okResponse() {
+  return new Response("OK", { status: 200 });
+}
+
+function normalizePhoneNumber(phoneNumber) {
+  if (typeof phoneNumber !== "string") return null;
+  const trimmed = phoneNumber.trim();
+  if (!trimmed.startsWith("+")) return null;
+  const digitsOnly = trimmed.replace(/\D/g, "");
+  if (
+    digitsOnly.length < E164_MIN_DIGITS ||
+    digitsOnly.length > E164_MAX_DIGITS
+  ) {
+    return null;
+  }
+  return `+${digitsOnly}`;
+}
 
 function getToPhone(messagePayload) {
   const to =
     (Array.isArray(messagePayload.to) && messagePayload.to[0]?.phone_number) ||
     messagePayload.to?.phone_number ||
     messagePayload.to;
-  return typeof to === "string" ? to : null;
+  return normalizePhoneNumber(to);
 }
 
 async function getRoute(env, toPhone) {
@@ -31,20 +51,29 @@ async function getRoute(env, toPhone) {
 }
 
 function buildEmailHtml(fromPhone, friendlyDate, text, mediaHtml) {
-  return `
-        <h2>New SMS Received</h2>
-        <p><strong>From:</strong> ${fromPhone}</p>
-        <p><strong>Received at:</strong> ${friendlyDate}</p>
-        <p><strong>Message:</strong> ${text}</p>
-        ${mediaHtml}
-      `;
+  return `<h2>New SMS Received</h2>
+<p><strong>From:</strong> ${fromPhone}</p>
+<p><strong>Received at:</strong> ${friendlyDate}</p>
+<p><strong>Message:</strong> ${text}</p>
+${mediaHtml}`;
 }
 
 function buildEmailText(fromPhone, friendlyDate, text) {
   return `New SMS Received\nFrom: ${fromPhone}\nReceived at: ${friendlyDate}\nMessage: ${text}`;
 }
 
-async function sendMailgunEmail(env, toEmail, fromPhone, friendlyDate, text, mediaHtml) {
+async function sendMailgunEmail(
+  env,
+  toEmail,
+  fromPhone,
+  friendlyDate,
+  text,
+  mediaHtml,
+) {
+  if (!toEmail) {
+    console.error("Missing recipient email for forward_email route");
+    return;
+  }
   const html = buildEmailHtml(fromPhone, friendlyDate, text, mediaHtml);
   const plainText = buildEmailText(fromPhone, friendlyDate, text);
 
@@ -75,6 +104,10 @@ async function sendMailgunEmail(env, toEmail, fromPhone, friendlyDate, text, med
 }
 
 async function sendTelnyxReply(env, toPhone, fromPhone, replyText) {
+  if (!env.TELNYX_API_KEY) {
+    console.error("Missing TELNYX_API_KEY for auto_reply route");
+    return;
+  }
   const telnyxResponse = await fetch("https://api.telnyx.com/v2/messages", {
     method: "POST",
     headers: {
@@ -97,7 +130,7 @@ async function processMedia(messagePayload) {
   let mediaHtml = "";
   const media = messagePayload.media || [];
   for (const item of media) {
-    if (item.content_type.startsWith("image/")) {
+    if (item?.content_type?.startsWith("image/") && item.url) {
       try {
         const response = await fetch(item.url);
         if (response.ok) {
@@ -120,6 +153,17 @@ async function processMedia(messagePayload) {
   return mediaHtml;
 }
 
+function getFromPhone(messagePayload) {
+  const fromPhone = messagePayload?.from?.phone_number;
+  return typeof fromPhone === "string" && fromPhone.length > 0
+    ? fromPhone
+    : "(Unknown)";
+}
+
+function getFromPhoneForReply(messagePayload) {
+  return normalizePhoneNumber(messagePayload?.from?.phone_number);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
@@ -139,11 +183,12 @@ export default {
         data.event_type !== "message.received" ||
         data.payload.direction !== "inbound"
       ) {
-        return new Response("OK", { status: 200 });
+        return okResponse();
       }
 
       const messagePayload = data.payload;
-      const fromPhone = messagePayload.from.phone_number;
+      const fromPhone = getFromPhone(messagePayload);
+      const fromPhoneForReply = getFromPhoneForReply(messagePayload);
       const toPhone = getToPhone(messagePayload);
       const text = messagePayload.text || "(No text)";
       const route = await getRoute(env, toPhone);
@@ -153,9 +198,13 @@ export default {
       if (mode === "auto_reply") {
         if (!route?.reply_text) {
           console.error("Missing reply_text for auto_reply route");
-          return new Response("OK", { status: 200 });
+          return okResponse();
         }
-        await sendTelnyxReply(env, toPhone, fromPhone, route.reply_text);
+        if (!toPhone || !fromPhoneForReply) {
+          console.error("Cannot auto-reply due to invalid phone format");
+          return okResponse();
+        }
+        await sendTelnyxReply(env, toPhone, fromPhoneForReply, route.reply_text);
       } else if (mode === "forward_email") {
         const date = new Date(data.occurred_at);
         const friendlyDate = date.toLocaleString("en-US", {
@@ -176,7 +225,7 @@ export default {
         console.error(`Unsupported route mode: ${mode}`);
       }
 
-      return new Response("OK", { status: 200 });
+      return okResponse();
     } catch (error) {
       console.error("Worker error:", error);
       return new Response("Internal Server Error", { status: 500 });
