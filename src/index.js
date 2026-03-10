@@ -89,7 +89,7 @@ async function sendMailgunEmail(
     subject: `New SMS from ${fromPhone}`,
     html,
     text: plainText,
-    tag: "sms_forward",
+    "o:tag": "sms_forward",
   };
 
   const formData = new URLSearchParams(mailgunData);
