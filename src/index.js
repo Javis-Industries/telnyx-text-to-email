@@ -16,6 +16,7 @@ function okResponse() {
   return new Response("OK", { status: 200 });
 }
 
+// Normalize phone number to E.164 format (digits only, prefixed with +)
 function normalizePhoneNumber(phoneNumber) {
   if (typeof phoneNumber !== "string") return null;
   const trimmed = phoneNumber.trim();
@@ -30,6 +31,7 @@ function normalizePhoneNumber(phoneNumber) {
   return `+${digitsOnly}`;
 }
 
+// Extract the destination phone number from the message payload
 function getToPhone(messagePayload) {
   const to =
     (Array.isArray(messagePayload.to) && messagePayload.to[0]?.phone_number) ||
@@ -38,6 +40,7 @@ function getToPhone(messagePayload) {
   return normalizePhoneNumber(to);
 }
 
+// Retrieve routing configuration from KV based on the destination phone number
 async function getRoute(env, toPhone) {
   if (!toPhone) return null;
   const raw = await env.NUMBER_TO_EMAIL.get(`${ROUTE_KEY_PREFIX}${toPhone}`);
@@ -50,6 +53,7 @@ async function getRoute(env, toPhone) {
   }
 }
 
+// Build HTML content for the email, including media if present
 function buildEmailHtml(fromPhone, friendlyDate, text, mediaHtml) {
   return `<h2>New SMS Received</h2>
 <p><strong>From:</strong> ${fromPhone}</p>
@@ -58,10 +62,12 @@ function buildEmailHtml(fromPhone, friendlyDate, text, mediaHtml) {
 ${mediaHtml}`;
 }
 
+// Build plain text content for the email
 function buildEmailText(fromPhone, friendlyDate, text) {
   return `New SMS Received\nFrom: ${fromPhone}\nReceived at: ${friendlyDate}\nMessage: ${text}`;
 }
 
+// Send an email via Mailgun API with the SMS details and media (if any)
 async function sendMailgunEmail(
   env,
   toEmail,
@@ -83,6 +89,7 @@ async function sendMailgunEmail(
     subject: `New SMS from ${fromPhone}`,
     html,
     text: plainText,
+    tag: "sms_forward",
   };
 
   const formData = new URLSearchParams(mailgunData);
@@ -103,6 +110,7 @@ async function sendMailgunEmail(
   }
 }
 
+// Send an auto-reply SMS via Telnyx API using the configured reply text
 async function sendTelnyxReply(env, toPhone, fromPhone, replyText) {
   if (!env.TELNYX_API_KEY) {
     console.error("Missing TELNYX_API_KEY for auto_reply route");
@@ -126,6 +134,7 @@ async function sendTelnyxReply(env, toPhone, fromPhone, replyText) {
   }
 }
 
+// Process media attachments in the message payload and convert them to HTML for email embedding
 async function processMedia(messagePayload) {
   let mediaHtml = "";
   const media = messagePayload.media || [];
@@ -153,6 +162,7 @@ async function processMedia(messagePayload) {
   return mediaHtml;
 }
 
+// Extract the sender's phone number from the message payload, with a fallback for unknown format
 function getFromPhone(messagePayload) {
   const fromPhone = messagePayload?.from?.phone_number;
   return typeof fromPhone === "string" && fromPhone.length > 0
@@ -160,10 +170,12 @@ function getFromPhone(messagePayload) {
     : "(Unknown)";
 }
 
+// Extract the sender's phone number for reply purposes, ensuring it's in a valid format
 function getFromPhoneForReply(messagePayload) {
   return normalizePhoneNumber(messagePayload?.from?.phone_number);
 }
 
+// Main worker entry point: handles incoming POST requests from Telnyx webhooks, processes the message, and routes it based on configuration
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") {
@@ -213,7 +225,12 @@ export default {
           console.error("Cannot auto-reply due to invalid phone format");
           return okResponse();
         }
-        await sendTelnyxReply(env, toPhone, fromPhoneForReply, route.reply_text);
+        await sendTelnyxReply(
+          env,
+          toPhone,
+          fromPhoneForReply,
+          route.reply_text,
+        );
       } else if (mode === "forward_email") {
         if (!route.email) {
           console.error(`Missing email in forward_email route for: ${toPhone}`);
