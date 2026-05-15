@@ -9,3 +9,7 @@ A Cloudflare Worker for sending SMS messages as an email using Telnyx and Mailgu
 - A Cloudflare account to deploy the Worker.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Javis-Industries/telnyx-text-to-email)
+
+`cachedNumberToEmail` is scoped to the module
+
+`getNumberToEmailMap()` returns immediately after the first call because it is scoped to the module. It will return the already-parsed JSON
